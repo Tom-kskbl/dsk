@@ -124,7 +124,18 @@ def main():
     ap.add_argument("--only", default=None)
     ap.add_argument("--size", default="1024*1024")
     ap.add_argument("--darken", type=float, default=0.42)
+    ap.add_argument("--import-local", nargs=2, action="append", metavar=("SRC", "NAME"),
+                    help="把本地图片(如 Canva 导出的)按同一套参数转成背景板, 可重复")
     a = ap.parse_args()
+
+    # 先把本地图转成背景板(不需要联网, 也不需要 key)
+    if a.import_local:
+        for src, name in a.import_local:
+            dst = to_backdrop(src, name, darken=a.darken)
+            print(f"  [本地 {name}] -> {dst}")
+        if not a.only:
+            return 0
+
     cfg = json.load(open(os.path.join(C.CACHE, "aliyun.json"), encoding="utf-8"))
     key, base = cfg["api_key"], cfg["base_url"].rstrip("/")
 

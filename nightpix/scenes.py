@@ -69,30 +69,29 @@ def limbo(surf, ctx, level=0.6, t=0.0, floor=True):
 # 1. 凌晨三点的天花板
 # --------------------------------------------------------------------------
 def ceiling_3am(surf, ctx, lt, dur):
-    """仰视: 天花板 + 房梁 + 吊灯 + 窗帘透进来的街灯 + 发光的手机 + 躺床侧影。"""
+    """凌晨的房间: 床、窗、月光 + 发光的手机 + 躺着的人。
+
+    背景用 Canva AI 生成的像素画卧室(见 docs/ai-assets.md), 它自带床/窗/月亮/床头柜,
+    比程序化的"天花板房梁"信息量大得多; 没有就回退到程序化底。
+    """
     k = P.clamp(lt / dur)
-    surf.blit(ctx.bg_ceil, (0, 0))
-    # 天花的斜向透视: 从画面中心向四角发散的四道房梁
-    for i, (x0, y0) in enumerate(((0, 60), (C.VW, 60), (60, 0), (C.VW - 60, 0))):
-        for j in range(3):
-            pygame.draw.line(surf, (15, 19, 34), (CX, 150),
-                             (x0 + (j - 1) * 26 * (1 if x0 else -1), y0), 1)
-    pygame.draw.line(surf, (20, 26, 42), (0, 96), (C.VW, 96), 1)
-    pygame.draw.line(surf, (14, 18, 32), (0, 98), (C.VW, 98), 1)
-    # 吊灯(暖, 但很弱)
-    lx, ly = CX + 96, 22
-    pygame.draw.line(surf, (30, 37, 58), (lx, 0), (lx, ly), 1)
-    pygame.draw.polygon(surf, (36, 44, 68), [(lx - 22, ly + 10), (lx + 22, ly + 10),
-                                             (lx + 12, ly), (lx - 12, ly)])
-    P.lamp_core(surf, lx, ly + 16, 2.4, C.WARM, 0.20)
-    # 右侧窗帘: 街灯从缝里透进来
-    pygame.draw.rect(surf, (14, 19, 33), (C.VW - 46, 0, 46, C.VH))
-    for i in range(5):
-        pygame.draw.line(surf, (20, 26, 44), (C.VW - 44 + i * 9, 0),
-                         (C.VW - 44 + i * 9, C.VH), 2)
-    P.pool_glow(surf, C.VW - 30, 128, 62, 190, (196, 172, 132), 0.13)
-    pygame.draw.line(surf, (34, 38, 48), (C.VW - 47, 0), (C.VW - 47, C.VH), 1)
-    # 手机冷光: 从右下角打上来
+    used = backdrop(surf, "ceiling_3am_canva")
+    if used:
+        P.dim(surf, 0.74)
+    else:
+        surf.blit(ctx.bg_ceil, (0, 0))
+        # 天花的斜向透视: 从画面中心向四角发散的四道房梁
+        for i, (x0, y0) in enumerate(((0, 60), (C.VW, 60), (60, 0), (C.VW - 60, 0))):
+            for j in range(3):
+                pygame.draw.line(surf, (15, 19, 34), (CX, 150),
+                                 (x0 + (j - 1) * 26 * (1 if x0 else -1), y0), 1)
+        # 吊灯(暖, 但很弱)
+        lx, ly = CX + 96, 22
+        pygame.draw.line(surf, (30, 37, 58), (lx, 0), (lx, ly), 1)
+        pygame.draw.polygon(surf, (36, 44, 68), [(lx - 22, ly + 10), (lx + 22, ly + 10),
+                                                 (lx + 12, ly), (lx - 12, ly)])
+        P.lamp_core(surf, lx, ly + 16, 2.4, C.WARM, 0.20)
+    # 手机冷光: 从右下角打上来(这一段的核心动作)
     ph = pygame.Rect(CX + 60, 210, 44, 74)
     R.phone(surf, ph, lt, screen_glow=0.9, content="feed")
     P.glow_at(surf, ph.centerx, ph.centery, 120, C.COOL, 0.16)
@@ -102,17 +101,11 @@ def ceiling_3am(surf, ctx, lt, dur):
     pygame.draw.rect(surf, (30, 38, 60), (0, bed_y, C.VW, C.VH - bed_y))
     P.dither_gradient_rect(surf, (0, bed_y, C.VW, C.VH - bed_y), (30, 38, 60), (16, 21, 36))
     pygame.draw.line(surf, (62, 78, 114), (0, bed_y), (C.VW, bed_y))
-    # 躺着的人: 床上侧影, 头在左(仰视: 只看见被子和一个轮廓)
-    hx, hy = CX - 100, GROUND + 26
-    pygame.draw.ellipse(surf, (58, 74, 110), (hx - 6, hy - 40, 152, 58))       # 被子
-    pygame.draw.ellipse(surf, (74, 94, 138), (hx + 6, hy - 36, 130, 50))
-    pygame.draw.circle(surf, (66, 84, 124), (hx + 4, hy - 22), 13)             # 头
-    for k in range(4):                                                          # 头发
-        pygame.draw.arc(surf, (44, 56, 88), (hx - 10 + k * 3, hy - 38 + k * 2, 40, 30),
-                        0.4, 2.6, 1)
-    # 挂钟 23:47 -> 03:12
+    # 躺着的人: 用精灵画一个小侧影缩在床里(原来那个椭圆读不出是"人", 已废弃)
+    K.draw_keeper(surf, CX - 130, bed_y + 4, 0.42, lt, 2, "lie", shadow=False)
+    # 挂钟 23:47 -> 03:12 (挪到左下, 别压住窗户)
     mins = int(P.lerp(23 * 60 + 47, 27 * 60 + 12, k)) % (24 * 60)
-    R.clock(surf, 96, 96, 34, mins // 60, mins % 60, glow=True)
+    R.clock(surf, 74, 268, 30, mins // 60, mins % 60, glow=True)
     T.draw(surf, "凌晨", 96, 150, color=C.MUTE, size=C.FONT_SIZE_BIG, anchor="midtop")
     if k > 0.55:
         a = int(160 * (k - 0.55) / 0.45)
@@ -281,7 +274,7 @@ def sleep_tug(surf, ctx, lt, dur):
     """床两边的拔河: 睡眠 vs 睡眠努力; 越用力越输, 灯忽明忽灭。"""
     k = P.clamp(lt / dur)
     # 背景板里已经有一张床和窗, 比程序化的色块床有说服力得多
-    used = backdrop(surf, "sleep_tug")
+    used = backdrop(surf, "sleep_tug_canva")
     if not used:
         surf.blit(ctx.bg_room, (0, 0))
     else:
@@ -289,7 +282,7 @@ def sleep_tug(surf, ctx, lt, dur):
     pull = P.clamp(0.5 + math.sin(lt * 1.1) * 0.34 + k * 0.12)
     R.tug_of_war(surf, CX, 132, 300, pull, lt)
     # 她坐在床上(背景板里的床在画面中下), 灯随"越用力越输"忽明忽灭
-    K.draw_keeper(surf, CX - 40, 268, P.clamp(0.5 - 0.25 * k), lt, 3, "sit", shadow=False)
+    K.draw_keeper(surf, CX - 118, 286, P.clamp(0.5 - 0.25 * k), lt, 2, "sit", shadow=False)
     # 时钟: 03:00 -> 04:00 一直没睡
     mins = int(P.lerp(3 * 60, 4 * 60, k))
     R.clock(surf, CX + 196, 76, 30, mins // 60, mins % 60, glow=False)
