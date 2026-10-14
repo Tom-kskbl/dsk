@@ -1,0 +1,61 @@
+{
+  "atlas": "atlas.png",
+  "sprites": {
+    "keeper": {
+      "x": 2,
+      "y": 2,
+      "w": 16,
+      "h": 30,
+      "anchor": "bottom"
+    },
+    "keeper_chibi": {
+      "x": 20,
+      "y": 2,
+      "w": 16,
+      "h": 24,
+      "anchor": "bottom"
+    },
+    "lantern": {
+      "x": 38,
+      "y": 2,
+      "w": 8,
+      "h": 8,
+      "anchor": "center"
+    },
+    "phone": {
+      "x": 48,
+      "y": 2,
+      "w": 8,
+      "h": 12,
+      "anchor": "center"
+    },
+    "clock": {
+      "x": 58,
+      "y": 2,
+      "w": 10,
+      "h": 11,
+      "anchor": "center"
+    },
+    "bed": {
+      "x": 70,
+      "y": 2,
+      "w": 22,
+      "h": 8,
+      "anchor": "bottom"
+    },
+    "lamp": {
+      "x": 94,
+      "y": 2,
+      "w": 8,
+      "h": 8,
+      "anchor": "bottom"
+    },
+    "brain": {
+      "x": 104,
+      "y": 2,
+      "w": 14,
+      "h": 11,
+      "anchor": "center"
+    }
+  }
+}
