@@ -47,8 +47,10 @@ def meta(name: str) -> dict:
 def tinted(name: str, level: float, dim_color=(7, 10, 20)) -> pygame.Surface:
     """按 level(0..1) 压暗 —— 灯越暗, 人物越沉进夜色。
 
-    注意: 不能用"盖一层半透明黑矩形"的做法 —— 那会把 sprite 周围的透明区一起涂黑,
-    渲染出来每个精灵都顶着一个黑方块。必须按通道相乘, 只改 RGB、保留 alpha。
+    实现上踩过两次坑, 都记在这里:
+      1. 不能盖"半透明黑矩形" —— 会把 sprite 周围的透明区一起涂黑, 每个精灵顶个黑方块
+      2. 用 pixels3d 写 RGB 虽然 alpha 测试看着是干净的, 但配合上层的加色光晕仍会显出方块
+    最终改成 BLEND_RGB_MULT 通道乘法: 只缩 RGB、完全不动 alpha, 是三者里唯一稳的。
     """
     key = (name, round(level, 2))
     if key in _CACHE:
@@ -56,11 +58,17 @@ def tinted(name: str, level: float, dim_color=(7, 10, 20)) -> pygame.Surface:
     s = get(name)
     lv = 0.0 if level < 0 else 1.0 if level > 1 else level
     if lv < 0.999:
+        s = s.copy()
+        # 关键: BLEND_RGB_MULT 只乘 RGB, 但会把目标 alpha 覆盖成源 alpha(即 255),
+        # 于是 sprite 周围的透明区被刷成不透明 -> 每个精灵顶着一个黑方块。
+        # 先把 alpha 存下来, 乘完再写回去。
         import numpy as np
-        rgb = pygame.surfarray.pixels3d(s).astype(np.float32)
-        base = np.array(dim_color, dtype=np.float32)
-        rgb = rgb * lv + base[None, None, :] * (1.0 - lv) * 0.55
-        pygame.surfarray.pixels3d(s)[:] = np.clip(rgb, 0, 255).astype(np.uint8)
+        keep = pygame.surfarray.pixels_alpha(s).copy()
+        f = int(round(255 * (0.18 + 0.82 * lv)))
+        mul = pygame.Surface(s.get_size())
+        mul.fill((f, f, f))
+        s.blit(mul, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
+        pygame.surfarray.pixels_alpha(s)[:] = keep
     _CACHE[key] = s
     return s
 
@@ -101,3 +109,33 @@ def draw(surf, name: str, x: int, y: int, level: float = 1.0, scale: int = 2,
 
 def available() -> list[str]:
     return list(_manifest()["sprites"])
+
+
+# --------------------------------------------------------------------------
+# 场景背景板(文生图生成的像素画, 见 tools/gen_backdrops.py)
+# --------------------------------------------------------------------------
+def backdrop(name: str, tint=None, alpha=255) -> pygame.Surface | None:
+    """取一张 640x360 背景板。没有就返回 None, 调用方回退到程序化底。"""
+    key = ("bd", name, tint, alpha)
+    if key in _CACHE:
+        return _CACHE[key]
+    p = os.path.join(C.ASSETS, "backdrops", name + ".png")
+    if not os.path.exists(p):
+        return None
+    s = pygame.image.load(p).convert()
+    if s.get_size() != (C.VW, C.VH):
+        s = pygame.transform.scale(s, (C.VW, C.VH))
+    if tint:
+        layer = pygame.Surface(s.get_size())
+        layer.fill(tint)
+        s = s.copy()
+        s.blit(layer, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+    if alpha < 255:
+        s = s.copy()
+        s.set_alpha(alpha)
+    _CACHE[key] = s
+    return s
+
+
+def has_backdrop(name: str) -> bool:
+    return os.path.exists(os.path.join(C.ASSETS, "backdrops", name + ".png"))

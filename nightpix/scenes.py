@@ -12,6 +12,7 @@ import random
 
 import pygame
 
+from . import assets as A
 from . import config as C
 from . import keeper as K
 from . import paint as P
@@ -20,6 +21,23 @@ from . import props as R
 
 GROUND = 300
 CX = 320
+
+
+def backdrop(surf, name, fallback=None, darken=0.0, tint=None):
+    """铺一张背景板; 没有就回退。返回是否用了背景板。
+
+    背景板是文生图生成的完整像素画房间, 比程序化的纯色渐变有信息量得多;
+    但它不受本片调色板控制, 所以统一再压一道暗 + 可选偏色, 保持色调一致。
+    """
+    bd = A.backdrop(name, tint=tint)
+    if bd is None:
+        if fallback:
+            fallback()
+        return False
+    surf.blit(bd, (0, 0))
+    if darken > 0:
+        P.dim(surf, 1.0 - darken)
+    return True
 
 
 # --------------------------------------------------------------------------
@@ -262,20 +280,24 @@ def feed_glow(surf, ctx, lt, dur):
 def sleep_tug(surf, ctx, lt, dur):
     """床两边的拔河: 睡眠 vs 睡眠努力; 越用力越输, 灯忽明忽灭。"""
     k = P.clamp(lt / dur)
-    surf.blit(ctx.bg_room, (0, 0))
-    R.bed(surf, CX - 130, 196, 260, 86, lit=0.35)
+    # 背景板里已经有一张床和窗, 比程序化的色块床有说服力得多
+    used = backdrop(surf, "sleep_tug")
+    if not used:
+        surf.blit(ctx.bg_room, (0, 0))
+    else:
+        P.dim(surf, 0.78)
     pull = P.clamp(0.5 + math.sin(lt * 1.1) * 0.34 + k * 0.12)
-    R.tug_of_war(surf, CX, 150, 300, pull, lt)
-    # 她躺在床上, 睁着眼
-    K.draw_keeper(surf, CX - 40, 216, P.clamp(0.5 - 0.25 * k), lt, 3, "sit", shadow=False)
+    R.tug_of_war(surf, CX, 132, 300, pull, lt)
+    # 她坐在床上(背景板里的床在画面中下), 灯随"越用力越输"忽明忽灭
+    K.draw_keeper(surf, CX - 40, 268, P.clamp(0.5 - 0.25 * k), lt, 3, "sit", shadow=False)
     # 时钟: 03:00 -> 04:00 一直没睡
     mins = int(P.lerp(3 * 60, 4 * 60, k))
-    R.clock(surf, CX + 196, 84, 30, mins // 60, mins % 60, glow=False)
+    R.clock(surf, CX + 196, 76, 30, mins // 60, mins % 60, glow=False)
     if k > 0.45:
         a = (k - 0.45) / 0.55
-        T.draw(surf, "20 分钟还没睡着？", CX - 140, 300,
+        T.draw(surf, "20 分钟还没睡着？", CX - 190, 52,
                color=P.lerp_color(C.MUTE, C.TEXT, P.clamp(a * 2)), size=C.FONT_SIZE_SMALL)
-        T.draw(surf, "就起来，别在床上硬躺", CX + 20, 300,
+        T.draw(surf, "就起来，别在床上硬躺", CX + 20, 52,
                color=P.lerp_color(C.MUTE, C.WARM, P.clamp(a * 2)), size=C.FONT_SIZE_SMALL)
     P.source_tag(surf, "刺激控制法 · 睡眠努力悖论")
 
@@ -284,21 +306,31 @@ def sleep_tug(surf, ctx, lt, dur):
 # 8. 天亮了 + 三招
 # --------------------------------------------------------------------------
 def dawn_three_moves(surf, ctx, lt, dur):
-    """日出 + 三张行动卡逐条打勾。"""
+    """日出 + 三张行动卡逐条打勾。用文生图的天亮背景板打底。"""
     k = P.clamp(lt / dur)
-    # 天光: 夜色 -> 日出梯度
+    # 天光: 夜色 -> 日出梯度(没有背景板时的回退)
     top = P.lerp_color(C.NIGHT1, (72, 92, 138), k)
     bot = P.lerp_color(C.NIGHT0, (216, 168, 118), k)
-    surf.blit(P.make_gradient(top, bot), (0, 0))
-    sun_y = P.lerp(330, 236, k)
-    P.glow_at(surf, CX + 60, sun_y, int(P.lerp(90, 190, k)), (255, 206, 140), 0.22 + 0.2 * k)
-    pygame.draw.circle(surf, (255, 226, 172), (CX + 60, int(sun_y)), int(P.lerp(14, 26, k)))
+
+    def _fallback():
+        surf.blit(P.make_gradient(top, bot), (0, 0))
+
+    used = backdrop(surf, "dawn", fallback=_fallback)
+    if used:
+        # 背景板是固定饱满的天光, 用夜色盖一下再随 k 揭开, 做出"天亮起来"的过程
+        P.dim(surf, P.lerp(0.30, 1.0, k))
+    # 太阳压到左下(避开右侧三张行动卡), 也不和人物重叠
+    sun_x, sun_y = 108, P.lerp(352, 262, k)
+    P.glow_at(surf, sun_x, sun_y, int(P.lerp(90, 190, k)), (255, 206, 140), 0.22 + 0.2 * k)
+    pygame.draw.circle(surf, (255, 226, 172), (sun_x, int(sun_y)), int(P.lerp(11, 20, k)))
     for i in range(1, 5):
-        yy = int(sun_y + i * 16)
-        pygame.draw.line(surf, P.lerp_color(bot, (250, 210, 160), 0.5 / i),
-                         (0, yy), (C.VW, yy), 1)
-    pygame.draw.line(surf, (34, 43, 68), (0, GROUND), (C.VW, GROUND))
-    K.draw_keeper(surf, 116, GROUND, P.clamp(0.55 + 0.45 * k), lt, 3, "stand")
+        yy = int(sun_y + i * 14)
+        if yy < C.VH:
+            pygame.draw.line(surf, P.lerp_color(bot, (250, 210, 160), 0.5 / i),
+                             (0, yy), (C.VW, yy), 1)
+    pygame.draw.line(surf, (34, 43, 68), (0, 268), (C.VW, 268))
+    # 人物站在左侧偏中, 避开左边缘的字幕角标
+    K.draw_keeper(surf, 150, 268, P.clamp(0.55 + 0.45 * k), lt, 3, "stand")
     cards = [("写下来", "把担心写成具体的句子，标上概率"),
              ("别硬躺", "20 分钟睡不着就离开床"),
              ("别在深夜决定", "凌晨的判断等于疲劳驾驶")]
