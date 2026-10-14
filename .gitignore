@@ -1,0 +1,33 @@
+# 工具与临时文件（不进仓库）
+_tools/
+_tmp/
+_tmp2/
+_tmp3/
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 自备录音（可能有版权/隐私，默认不上传）
+voice/
+
+# 过程产物：逐帧 PNG、静音占位、调试截图、试码率片段
+out/stills_night/
+out/_*.png
+out/_*.mp4
+out/_*.wav
+_tmp/
+_tmp2/
+_tmp3/
+.cache/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*~
